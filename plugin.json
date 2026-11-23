@@ -1,8 +1,8 @@
 {
   "name": "swarm-router",
   "displayName": "Swarm Router",
-  "version": "1.0.0",
-  "description": "Routes /swarm and subagent tasks to cost-optimal models across Gemini and 3P (Claude) quota pools, scales thinking effort by difficulty, and enforces plan-first execution on complex tasks.",
+  "version": "1.1.0",
+  "description": "Hints lightweight main models (Flash/Hydrogen) to escalate complex tasks to /swarm, then lazy-loads cost-optimal model routing, thinking-effort scaling, and plan-first rules across shared Gemini and 3P (Claude) quotas.",
   "logo": "assets/logo.svg",
   "author": {
     "name": "JEF1056",
