@@ -12,32 +12,35 @@ When `/swarm` is active, this policy overrides the default "leave `model` off" r
 
 ## 1. Inspect Live Models & Quotas First
 
-Before spawning workers, call `swarm{action:"models", all:true}` (or `manage_subagents{Action:"models", All:true}` outside an active swarm) to inspect live `models`, `quotas`, and `quota_windows`.
+Before spawning workers, call `swarm{action:"models", all:true}` (or `manage_subagents{Action:"models", All:true}` outside an active swarm) to inspect live `models`, `tiers`, `quotas`, and `quota_windows`.
 
-- **Never hardcode version numbers**: Resolve exact model IDs dynamically from the live `models` list by matching family names (preferring the latest available version of a family when multiple versions exist).
-- **Inspect live quota buckets**: Read the actual `quota_windows` groups and reset windows (e.g., Gemini vs. 3P/Claude short-term `5h` and `weekly` buckets). Multiple machines share the same account quotas — never assume 100% headroom or that this machine is the only consumer.
+- **Never hardcode version numbers**: Always pick exact model IDs from the live `models` list, preferring the newest version of a family when multiple exist.
+- **Inspect live quota buckets**: Read the actual `quota_windows` groups and reset windows (e.g., Gemini vs. 3P short-term `5h` and `weekly` buckets). Multiple machines share the same account quotas — never assume 100% headroom or that this machine is the only consumer.
 
 ## 2. Model Tiers (Highest → Lowest Quota Cost)
 
 Always pass an explicit `model` ID from the live `models` list on `swarm{action:"add"}`.
 
 ### Smart Tier — Planning, Verification, Coordination, Hard RCA
-Match the latest available version by family keyword (in cost-to-quota order):
-1. **`opus`** *(3P / Claude pool)* — Hardest architecture plans, critical final verification, or stuck RCAs.
+Match the latest available version by family keyword (highest → lowest quota cost):
+1. **`opus`** / **`fable`** *(3P pool)* — Hardest architecture plans, critical final verification, or stuck RCAs.
 2. **`neon`** *(Gemini pool)* — High-capability Gemini planner, coordinator, or complex verifier.
-3. **`sonnet`** *(3P / Claude pool)* — Default 3P workhorse for planning, verification, and coordination.
+3. **`sonnet`** *(3P pool)* — Default 3P workhorse for planning, verification, and coordination.
 4. **`carbon`** *(Gemini pool)* — Balanced Gemini planner and verifier.
 5. **`argon`** *(Gemini pool)* — Most quota-efficient smart model for routine verification, triage, and light coordination.
 
 ### Grunt Tier — Implementation, Tests, Refactors, Research, Docs, Narrator/Monitor
-Match the latest available version by family keyword (in cost-to-quota order):
+Match the latest available version by family keyword (highest → lowest quota cost):
 1. **`hydrogen`** *(Gemini pool)* — Non-trivial multi-file coding, tricky bug fixes, and complex refactors.
-2. **`flash`** *(Gemini pool)* — Default for straightforward edits, unit tests, builds, codebase scans, docs, and narrator/monitor roles (use `flash-lite` / `flash_lite` for trivial `invoke_subagent` scans when available).
+2. **`flash`** *(Gemini pool)* — Default for straightforward edits, unit tests, builds, codebase scans, docs, and narrator/monitor roles (`flash-lite` / `flash_lite` for trivial scans).
 
-### Adapting to Future / Renamed Models
-If a future release renames or adds model families not listed above:
-- Infer **pool** from `quota_windows` / provider prefix (`gemini-*` vs. `claude-*` / 3P).
-- Infer **tier** from live `models` metadata (`tiers`, `display_names`, `notes`): place frontier/Pro/reasoning-class models in the **Smart Tier** and fast/Flash/Lite/coding-grunt models in the **Grunt Tier**, preserving the same smart-vs-grunt split and cross-pool balancing.
+### Dynamically Classifying New / Unknown Models
+When `models` returns a new or unfamiliar codename (not listed above), classify it dynamically in this order:
+1. **Live tier anchors**: Check `tiers` in `models` output (`flash_lite`, `flash`, `pro`). Any model mapped to `flash_lite` or `flash` is **Grunt**; any model mapped to `pro` is **Smart** (or upper Grunt).
+2. **Pool & list-position heuristic**:
+   - Models with `flash`, `lite`, `mini`, `haiku`, `oss`, or local-server tags (e.g., `(ml-1)`) → **Grunt**.
+   - Within a provider's block in `models`, models are typically listed strongest/priciest → fastest/cheapest. An unrecognized codename in the **3P pool** or listed above known grunt models defaults to **Smart** — **never put an unknown codename on high-volume grunt fan-outs** (prevents accidentally burning flagship quota).
+3. **Ask once if ambiguous**: If a brand-new codename appears and you want to use it, ask the user in 1 line (*"Saw new model `<id>` — should I treat it as Smart or Grunt, and where in cost order?"*) and use their answer for the session (optionally updating this skill if they want it saved across machines).
 
 ## 3. Starting `/swarm` From a Lightweight Main Model
 
@@ -47,10 +50,10 @@ If the user starts `/swarm` from a grunt main model (e.g., Flash or Hydrogen):
 
 ## 4. Cross-Quota Balancing
 
-- **Protect Gemini quota for grunt work**: Grunt workers (`hydrogen`, `flash`) draw from the Gemini pool. When the 3P pool's remaining headroom >= Gemini's (and its short-term window >= 25%), route smart roles (planning, verification, coordination) to **3P** (`sonnet` default; `opus` only for the hardest tasks).
+- **Protect Gemini quota for grunt work**: Grunt workers (`hydrogen`, `flash`) draw from the Gemini pool. When the 3P pool's remaining headroom >= Gemini's (and its short-term window >= 25%), route smart roles (planning, verification, coordination) to **3P** (`sonnet` default; `opus`/`fable` only for the hardest tasks).
 - **Shift smart roles to Gemini when 3P is lower**: When Gemini headroom > 3P headroom (or 3P short-term < 25%), route smart roles to **Gemini** (`argon` / `carbon` default; `neon` for hard tasks).
 - **Balance within grunt tier**: Default to `flash` for routine implementation, tests, docs, and scans; assign `hydrogen` to harder coding slices or after 1 failed `flash` attempt.
-- **Short-term & weekly pacing**: If any short-term window drops below 30% or a weekly window is burning faster than time elapsed, downshift one tier (`opus -> sonnet`, `neon -> carbon -> argon`, `hydrogen -> flash`), lower concurrency, and avoid speculative fan-outs.
+- **Short-term & weekly pacing**: If any short-term window drops below 30% or a weekly window is burning faster than time elapsed, downshift one tier (`opus/fable -> sonnet`, `neon -> carbon -> argon`, `hydrogen -> flash`), lower concurrency, and avoid speculative fan-outs.
 - **On quota exhaustion**: Switch the blocked worker with `swarm{action:"model", name, model}` to the healthiest pool in the same tier — never `kill` and re-`add` just for quota.
 
 ## 5. Thinking Effort Scaling
@@ -73,4 +76,4 @@ If a task is complex (touches multiple modules/systems, has architectural ambigu
 1. **Right-size concurrency**: Prefer 2–4 focused workers over 8+ overlapping ones; every `@all` wakes all workers and multiplies token burn.
 2. **Keep briefs short**: Inline exact file paths and done criteria (`<=5` lines); reference earlier posts by `#seq` instead of copy-pasting logs.
 3. **Kill finished workers immediately**: Land `share`/`branch` changes first, then kill finished workers; rotate long-running workers around ~45 turns to avoid >80k-token context bloat.
-4. **Respect 3P prompt cache windows**: Run Claude (`opus`/`sonnet`) planners and verifiers in tight bursts rather than leaving them idle >5 minutes and resuming with large context.
+4. **Respect 3P prompt cache windows**: Run 3P (`opus`/`fable`/`sonnet`) planners and verifiers in tight bursts rather than leaving them idle >5 minutes and resuming with large context.

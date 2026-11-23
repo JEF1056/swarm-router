@@ -39,7 +39,7 @@ Models are ordered from **highest to lowest quota cost** within each tier:
 ### Smart Tier — Planning, Verification, Coordination, Hard RCA
 | Order | Family | Pool | Best For |
 | :---: | :--- | :--- | :--- |
-| 1 | **Opus** (`*opus*`) | 3P / Claude | Hardest architecture plans, critical final verification, stuck RCAs |
+| 1 | **Opus / Fable** (`*opus*`, `*fable*`) | 3P / Claude | Hardest architecture plans, critical final verification, stuck RCAs |
 | 2 | **Neon** (`*neon*`) | Gemini | Complex Gemini planning, coordination, high-stakes verification |
 | 3 | **Sonnet** (`*sonnet*`) | 3P / Claude | Default 3P planner, verifier, and coordinator |
 | 4 | **Carbon** (`*carbon*`) | Gemini | Balanced Gemini planner and verifier |
@@ -50,6 +50,12 @@ Models are ordered from **highest to lowest quota cost** within each tier:
 | :---: | :--- | :--- | :--- |
 | 1 | **Hydrogen** (`*hydrogen*`) | Gemini | Non-trivial multi-file coding, tricky bug fixes, complex refactors |
 | 2 | **Flash** (`*flash*`) | Gemini | Default for straightforward edits, unit tests, builds, scans, docs, narrator/monitor |
+
+### Handling Future / Unrecognized Codenames
+When a brand-new codename appears in `swarm{action:"models", all:true}`:
+1. **Live tier anchors**: Models mapped to `flash_lite`/`flash` in `tiers` route to **Grunt**; models mapped to `pro` route to **Smart**.
+2. **Safe quota default**: Unrecognized 3P codenames or models listed above grunt families default to **Smart** (never placed on high-volume grunt fan-outs by accident); `flash`/`lite`/`mini`/`haiku`/`oss`/local models route to **Grunt**.
+3. **Ask once**: If ambiguous, the coordinator asks you in 1 line where the new model fits before routing heavy work to it.
 
 ## Thinking Effort Scaling
 
