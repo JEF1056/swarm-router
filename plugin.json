@@ -1,0 +1,21 @@
+{
+  "name": "swarm-router",
+  "displayName": "Swarm Router",
+  "version": "1.0.0",
+  "description": "Routes /swarm and subagent tasks to cost-optimal models across Gemini and 3P (Claude) quota pools, scales thinking effort by difficulty, and enforces plan-first execution on complex tasks.",
+  "logo": "assets/logo.svg",
+  "author": {
+    "name": "JEF1056",
+    "url": "https://github.com/JEF1056"
+  },
+  "homepage": "https://github.com/JEF1056/swarm-router",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JEF1056/swarm-router"
+  },
+  "suggestedPrompts": [
+    "Check live quota windows and recommend a /swarm roster for this task",
+    "Plan this complex task first, then execute with a balanced /swarm",
+    "Show how to pace shared 5h and weekly quotas across multiple machines"
+  ]
+}
