@@ -27,7 +27,7 @@ git -C ~/.gemini/config/plugins/swarm-router pull
 
 ## How It Stays Zero-Bloat Until `/swarm` Is Used
 
-- **`rules/AGENTS.md`** *(always on, 2 bullets)*: Tells lightweight main models (Flash / Hydrogen) when to suggest `/swarm` for complex tasks, and instructs the agent to load the `swarm-router` skill **only** when `/swarm` is invoked.
+- **`rules/AGENTS.md`** *(always on, 2 bullets)*: Read in every conversation — prefers **not** to use `/swarm` for simple tasks (since swarms are expensive), but instructs agents **not to hesitate** recommending `/swarm` once a task becomes complex and multi-step, and lazy-loads `swarm-router` only when `/swarm` is invoked.
 - **`skills/swarm-router/SKILL.md`** *(lazy-loaded on `/swarm`)*: Uses Antigravity progressive disclosure so the full routing matrix, quota balancing policy, thinking-effort ladder, and plan-first workflow are **not read during normal conversations** — they load only when `/swarm` starts (or when you ask to inspect quotas).
 
 ## Version-Agnostic Model Routing & Cost Order
@@ -81,7 +81,7 @@ When multiple machines share the same Antigravity account, they draw from the sa
 
 1. **Run a cheap main model by default**: Keep everyday chats on Flash or Hydrogen (`-medium`). Let the tiny always-on rule nudge you to `/swarm` when a task genuinely needs a smarter model; once `/swarm` starts, the coordinator can either upgrade itself (`swarm{action:"model"}`) or delegate planning/verification to smart workers.
 2. **Always check live headroom first**: Run `swarm{action:"models", all:true}` before spawning a swarm (another machine may have recently used the short-term window).
-3. **Offload smart roles to 3P when headroom allows**: Since grunt workers (`hydrogen`, `flash`) consume Gemini quota, routing planning/verification/coordination to `sonnet` (or `opus`/`fable` for critical work) when 3P headroom >= Gemini headroom keeps both pools balanced. Shift smart roles to `neon` (or `carbon` for deepest architecture/verification; `argon` only if both are unavailable) whenever 3P drops below Gemini or under 25%.
+3. **Actively balance hourly (`5h`) AND `weekly` quotas across pools**: Check both the short-term (hourly/`5h`) and `weekly` windows for every pool; the tighter window governs headroom. Whenever one pool is burning faster or lower on either window, shift eligible roles to run down the fuller pool (route smart roles to **3P** `sonnet`/`opus`/`fable` when Gemini is tighter from grunt work; shift smart roles to **Gemini** `neon`/`carbon` when 3P's hourly or weekly window is tighter; `argon` only if both are unavailable). Re-check live quotas before spawning new waves.
 4. **Plan first on complex tasks**: One smart `planner` turn (`workspace: "inherit"`) locking interfaces and disjoint file ownership is far cheaper than 3 grunt workers colliding and retrying.
 5. **Escalate lazily, cap retry loops**: Start routine work on `flash-medium`, upgrade to `hydrogen-medium` if it struggles, and escalate to a smart model for RCA after 2 failed rounds instead of burning retries.
 6. **Keep swarms lean and short-lived**:
