@@ -10,58 +10,61 @@ description: >-
 
 When `/swarm` is active, this policy overrides the default "leave `model` off" rule unless the user explicitly specifies a model for a worker or task.
 
-## 1. Inspect Live Quotas First
+## 1. Inspect Live Models & Quotas First
 
-Before spawning workers, call `swarm{action:"models", all:true}` (or `manage_subagents{Action:"models", All:true}` if inspecting quotas outside an active swarm) to inspect live `quota_windows` and per-model `quotas`.
+Before spawning workers, call `swarm{action:"models", all:true}` (or `manage_subagents{Action:"models", All:true}` outside an active swarm) to inspect live `models`, `quotas`, and `quota_windows`.
 
-Multiple machines share the same `5h` and `weekly` quota pools:
-- **Gemini pool** (`gemini-5h` / `gemini-weekly`): Neon, Carbon, Argon, Hydrogen, Flash
-- **3P pool** (`3p-5h` / `3p-weekly`): Opus, Sonnet, GPT-OSS
-
-Never assume 100% headroom or that this machine is the only consumer.
+- **Never hardcode version numbers**: Resolve exact model IDs dynamically from the live `models` list by matching family names (preferring the latest available version of a family when multiple versions exist).
+- **Inspect live quota buckets**: Read the actual `quota_windows` groups and reset windows (e.g., Gemini vs. 3P/Claude short-term `5h` and `weekly` buckets). Multiple machines share the same account quotas — never assume 100% headroom or that this machine is the only consumer.
 
 ## 2. Model Tiers (Highest → Lowest Quota Cost)
 
-Always pass an explicit `model` on `swarm{action:"add"}`.
+Always pass an explicit `model` ID from the live `models` list on `swarm{action:"add"}`.
 
 ### Smart Tier — Planning, Verification, Coordination, Hard RCA
-1. **Opus** (`claude-opus-5-5-{low,medium,high}`) — `3p` pool. Reserve for the hardest architecture plans, critical final verification, or stuck RCAs.
-2. **Neon** (`gemini-4-neon-{low,medium,high}`) — `gemini` pool. High-capability Gemini planner, coordinator, or complex verifier.
-3. **Sonnet** (`claude-sonnet-5-5-{low,medium,high}`) — `3p` pool. Default 3P workhorse for planning, verification, and coordination.
-4. **Carbon** (`gemini-4-carbon-{low,medium,high}`) — `gemini` pool. Balanced Gemini planner and verifier.
-5. **Argon** (`gemini-4-argon-{low,medium,high}`) — `gemini` pool. Most quota-efficient smart model for routine verification, triage, and light coordination.
+Match the latest available version by family keyword (in cost-to-quota order):
+1. **`opus`** *(3P / Claude pool)* — Hardest architecture plans, critical final verification, or stuck RCAs.
+2. **`neon`** *(Gemini pool)* — High-capability Gemini planner, coordinator, or complex verifier.
+3. **`sonnet`** *(3P / Claude pool)* — Default 3P workhorse for planning, verification, and coordination.
+4. **`carbon`** *(Gemini pool)* — Balanced Gemini planner and verifier.
+5. **`argon`** *(Gemini pool)* — Most quota-efficient smart model for routine verification, triage, and light coordination.
 
 ### Grunt Tier — Implementation, Tests, Refactors, Research, Docs, Narrator/Monitor
-1. **Hydrogen** (`gemini-4-hydrogen-{low,medium,high}`) — `gemini` pool. Non-trivial multi-file coding, tricky bug fixes, and complex refactors.
-2. **Flash** (`gemini-3.8-flash-{low,medium,high}`) — `gemini` pool. Default for straightforward edits, unit tests, builds, codebase scans, docs, and narrator/monitor roles.
-*(Use `flash_lite` / `gemini-3.5-flash-lite` for trivial `invoke_subagent` scans when available. If a model ID is absent on a machine, pick the closest available model in the same tier from `models`.)*
+Match the latest available version by family keyword (in cost-to-quota order):
+1. **`hydrogen`** *(Gemini pool)* — Non-trivial multi-file coding, tricky bug fixes, and complex refactors.
+2. **`flash`** *(Gemini pool)* — Default for straightforward edits, unit tests, builds, codebase scans, docs, and narrator/monitor roles (use `flash-lite` / `flash_lite` for trivial `invoke_subagent` scans when available).
+
+### Adapting to Future / Renamed Models
+If a future release renames or adds model families not listed above:
+- Infer **pool** from `quota_windows` / provider prefix (`gemini-*` vs. `claude-*` / 3P).
+- Infer **tier** from live `models` metadata (`tiers`, `display_names`, `notes`): place frontier/Pro/reasoning-class models in the **Smart Tier** and fast/Flash/Lite/coding-grunt models in the **Grunt Tier**, preserving the same smart-vs-grunt split and cross-pool balancing.
 
 ## 3. Starting `/swarm` From a Lightweight Main Model
 
-If the user starts `/swarm` from a grunt main model (e.g. `gemini-3.8-flash-*` or `gemini-4-hydrogen-*`):
-- **Upgrade coordination when needed**: For complex multi-slice tasks, switch yourself (the coordinator) to a smart model via `swarm{action:"model", model:"<smart-model>"}` (e.g. `claude-sonnet-5-5-medium` or `gemini-4-carbon-medium` / `gemini-4-argon-medium` based on live pool headroom), **or** keep coordination light and immediately delegate planning and verification to dedicated smart workers (`planner`, `verifier`).
+If the user starts `/swarm` from a grunt main model (e.g., Flash or Hydrogen):
+- **Upgrade coordination when needed**: For complex multi-slice tasks, switch yourself (the coordinator) to a smart model via `swarm{action:"model", model:"<smart-model-id>"}` (e.g., latest `sonnet`, `carbon`, or `argon` at `-medium` based on live pool headroom), **or** keep coordination light and immediately delegate planning and verification to dedicated smart workers (`planner`, `verifier`).
 - **Always route planning and verification to smart models**, never leave them on the grunt main model.
 
 ## 4. Cross-Quota Balancing
 
-- **Protect Gemini quota for grunt work**: Grunt workers run on the Gemini pool (`hydrogen`, `flash`). When `3p` headroom >= `gemini` headroom (and `3p-5h` >= 25%), route smart roles (planning, verification, coordination) to **3P** (`sonnet` default; `opus` only for the hardest tasks).
-- **Shift smart roles to Gemini when 3P is lower**: When `gemini` headroom > `3p` headroom (or `3p-5h` < 25%), route smart roles to **Gemini** (`argon` / `carbon` default; `neon` for hard tasks).
+- **Protect Gemini quota for grunt work**: Grunt workers (`hydrogen`, `flash`) draw from the Gemini pool. When the 3P pool's remaining headroom >= Gemini's (and its short-term window >= 25%), route smart roles (planning, verification, coordination) to **3P** (`sonnet` default; `opus` only for the hardest tasks).
+- **Shift smart roles to Gemini when 3P is lower**: When Gemini headroom > 3P headroom (or 3P short-term < 25%), route smart roles to **Gemini** (`argon` / `carbon` default; `neon` for hard tasks).
 - **Balance within grunt tier**: Default to `flash` for routine implementation, tests, docs, and scans; assign `hydrogen` to harder coding slices or after 1 failed `flash` attempt.
-- **5h & weekly pacing**: If either `5h` window drops below 30% or `weekly` is burning faster than time elapsed, downshift one tier (`opus -> sonnet`, `neon -> carbon -> argon`, `hydrogen -> flash`), lower concurrency, and avoid speculative fan-outs.
+- **Short-term & weekly pacing**: If any short-term window drops below 30% or a weekly window is burning faster than time elapsed, downshift one tier (`opus -> sonnet`, `neon -> carbon -> argon`, `hydrogen -> flash`), lower concurrency, and avoid speculative fan-outs.
 - **On quota exhaustion**: Switch the blocked worker with `swarm{action:"model", name, model}` to the healthiest pool in the same tier — never `kill` and re-`add` just for quota.
 
 ## 5. Thinking Effort Scaling
 
-Scale effort by task difficulty; default to **`-medium`** and cap at **`-high`**:
+Match the effort variant available for the chosen model in `models` (`-low`, `-medium`, `-high`; if a model has no effort suffix, use its base ID). Default to **`-medium`** and cap at **`-high`**:
 - **`-low`**: Mechanical or trivial work (formatting, renames, boilerplate, simple docs, file/log scans, narrator, monitor).
 - **`-medium`** *(default)*: Most tasks — standard implementation, test writing, refactoring, normal planning, routine verification, and coordination.
 - **`-high`** *(hard cap)*: Extremely difficult tasks only — subtle concurrency/state bugs, hard RCA after `-medium` fails, or high-stakes architecture/security planning and verification.
-- **Never select `-xhigh`** unless the user explicitly requests it.
+- **Never select `-xhigh` or `-max`** unless the user explicitly requests it.
 
 ## 6. Plan First on Complex Tasks
 
 If a task is complex (touches multiple modules/systems, has architectural ambiguity, shared interfaces, or >3 parallel slices):
-1. **Plan first**: Before spawning implementation workers, have the smart coordinator or a single smart `planner` worker (`workspace: "inherit"`, `sonnet-medium` / `carbon-medium` / `neon-medium` / `opus-medium` by difficulty and pool headroom) produce a concise plan with disjoint file ownership, interfaces, edge cases, and verification criteria.
+1. **Plan first**: Before spawning implementation workers, have the smart coordinator or a single smart `planner` worker (`workspace: "inherit"`, `sonnet` / `carbon` / `neon` / `opus` at `-medium` by difficulty and pool headroom) produce a concise plan with disjoint file ownership, interfaces, edge cases, and verification criteria.
 2. **Execute lean**: Spawn grunt workers (`flash` / `hydrogen`, `workspace: "share"` for concurrent editors) against the locked plan, paired with 1 smart `verifier` (`workspace: "inherit"`) per 2–4 authors.
 3. **Escalate lazily, cap loops**: Cap author<->verifier fix loops at 2 rounds on the same tier; escalate `flash -> hydrogen -> smart RCA` instead of burning retries.
 
