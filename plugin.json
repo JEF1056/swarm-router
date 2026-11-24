@@ -1,7 +1,7 @@
 {
   "name": "swarm-router",
   "displayName": "Swarm Router",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Hints lightweight main models (Flash/Hydrogen) to escalate complex tasks to /swarm, then lazy-loads version-agnostic model routing, thinking-effort scaling, and plan-first rules across shared Gemini and 3P (Claude) quotas.",
   "logo": "assets/logo.svg",
   "author": {

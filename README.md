@@ -27,7 +27,7 @@ git -C ~/.gemini/config/plugins/swarm-router pull
 
 ## How It Stays Zero-Bloat Until `/swarm` Is Used
 
-- **`rules/AGENTS.md`** *(always on, 2 bullets)*: Read in every conversation — prefers **not** to use `/swarm` for simple tasks (since swarms are expensive), but instructs agents **not to hesitate** recommending `/swarm` once a task becomes complex and multi-step, and lazy-loads `swarm-router` only when `/swarm` is invoked.
+- **`rules/AGENTS.md`** *(always on, 2 bullets)*: Read in every conversation — prefers **not** to use `/swarm` for simple tasks (since swarms are expensive), but instructs agents **not to hesitate** recommending `/swarm` once a task becomes complex/multi-step or highly parallelizable, and lazy-loads `swarm-router` only when `/swarm` is invoked.
 - **`skills/swarm-router/SKILL.md`** *(lazy-loaded on `/swarm`)*: Uses Antigravity progressive disclosure so the full routing matrix, quota balancing policy, thinking-effort ladder, and plan-first workflow are **not read during normal conversations** — they load only when `/swarm` starts (or when you ask to inspect quotas).
 
 ## Version-Agnostic Model Routing & Cost Order
