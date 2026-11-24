@@ -2,13 +2,14 @@
 name: swarm-router
 description: >-
   Swarm model routing, quota balancing, thinking-effort scaling, and plan-first
-  execution policy. Read ONLY when /swarm is invoked or when the user asks to
-  check live Gemini/3P quotas or design a swarm roster.
+  execution policy. Read ONLY when /swarm is invoked, when proactively starting
+  a swarm for a complex/highly parallelizable task, or when asked to check live
+  Gemini/3P quotas or design a swarm roster.
 ---
 
 # Swarm Model Routing, Quota Balancing & Plan-First Policy
 
-When `/swarm` is active, this policy overrides the default "leave `model` off" rule unless the user explicitly specifies a model for a worker or task.
+When starting or running a swarm (via `/swarm` or proactively for complex/highly parallelizable tasks), this policy overrides the default "leave `model` off" rule unless the user explicitly specifies a model for a worker or task.
 
 ## 1. Inspect Live Models & Quotas First
 
