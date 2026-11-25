@@ -53,8 +53,9 @@ When `models` returns a new or unfamiliar codename (not listed above), classify 
 
 ## 3. Starting `/swarm` From a Lightweight Main Model
 
-If the user starts `/swarm` from a grunt main model (e.g., Flash or Hydrogen):
+If the user starts `/swarm` from a standalone lightweight grunt main model (e.g., Flash or Hydrogen):
 - **Upgrade coordination when needed**: For complex multi-slice tasks, switch yourself (the coordinator) to a smart model via `swarm{action:"model", model:"<smart-model-id>"}` (e.g., latest `sonnet` or `neon` at `-medium` based on live pool headroom), **or** keep coordination light and immediately delegate planning and verification to dedicated smart workers (`planner`, `verifier`).
+- **Orchestrator coordinators (`neon-medium + hydrogen-medium`)**: Already Tier 2 — do **not** run `swarm{action:"model"}` at startup (only upgrade standalone lightweight Flash or Hydrogen mains).
 - **Always route planning and verification to smart models**, never leave them on the grunt main model.
 
 ## 4. Cross-Quota Balancing (Hourly & Weekly)
@@ -64,7 +65,7 @@ Balance models across all active quota pools (e.g., Gemini vs. 3P) by checking *
 - **Evaluate each pool's bottleneck window**: For each pool, look at **both** short-term (hourly/`5h`) remaining % and `weekly` remaining % (along with time until each resets). The tighter of the two windows governs that pool's true headroom (e.g., a pool with 90% hourly left but 15% weekly left is tight; a pool with 20% hourly left resetting in 4 hours is tight).
 - **Actively drain the fuller quota**: If one pool is burning faster or has less headroom on **either** its hourly/`5h` or `weekly` window, shift eligible roles to the **other** pool so both quotas stay balanced:
   - **Gemini tighter (or 3P has >= Gemini headroom and 3P hourly/weekly >= 25%)**: Grunt workers (`hydrogen`, `flash`) draw from Gemini, so route smart roles (planning, verification, coordination, hard RCA) to **3P** (`sonnet` default; `opus`/`fable` only for the hardest tasks) to run down 3P and spare Gemini.
-  - **3P tighter (3P hourly or weekly lower than Gemini, or 3P short-term < 25%)**: Route smart roles to **Gemini** (`neon` default; `carbon` for deepest planning, complex architecture, and high-stakes verification; `argon` only if both `carbon` and `neon` are unavailable) so 3P recovers.
+  - **3P tighter (3P hourly or weekly lower than Gemini, or 3P short-term < 25%)**: Route smart roles to **Gemini** (`neon` default; `carbon` for deepest planning, complex architecture, and high-stakes verification; `argon` only if both `carbon` and `neon` are unavailable) so 3P recovers. On G1 Pro/Ultra plans where the 3P weekly budget is much smaller (`24–48x` smaller than Gemini weekly), prefer Gemini (`neon-medium` / `hydrogen-medium`) over Claude whenever 3P weekly % is tighter.
 - **Re-check mid-swarm**: On long or multi-wave swarms, re-run `swarm{action:"models", all:true}` before spawning new waves so routing adapts as hourly/weekly windows shift across machines.
 - **Balance within grunt tier**: Default to `flash` for routine implementation, tests, docs, and scans; assign `hydrogen` to harder coding slices or after 1 failed `flash` attempt.
 - **When both pools are tight**: If both pools' short-term windows drop below 30% or their weekly windows are burning faster than elapsed week, downshift one tier (`opus/fable -> sonnet`, `carbon -> neon`, `hydrogen -> flash`), lower concurrency, avoid speculative fan-outs, and offload eligible tasks to available custom/local models.

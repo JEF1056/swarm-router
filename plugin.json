@@ -1,7 +1,7 @@
 {
   "name": "swarm-router",
   "displayName": "Swarm Router",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "Lets agents stay lean on simple tasks, start swarms directly for complex or highly parallelizable work, and lazy-load version-agnostic model routing, hourly/weekly quota balancing, thinking-effort scaling, and plan-first rules.",
   "logo": "assets/logo.svg",
   "author": {
