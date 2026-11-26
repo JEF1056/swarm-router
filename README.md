@@ -1,15 +1,13 @@
 # Swarm Router (Antigravity Plugin)
 
-An Antigravity plugin designed for running cheap/fast models (like **Flash** or **Hydrogen**) in your main conversation, hinting to escalate complex tasks to `/swarm`, and lazy-loading version-agnostic `/swarm` model routing across shared **Gemini** and **3P (Claude)** quota pools.
+A token-lean Antigravity plugin for **Gemini-first** `/swarm` model routing, shared `5h`/`weekly` quota pacing, thinking-effort scaling, and plan-first execution — reserving scarce **3P Claude** quota for genuinely hard tasks.
 
 ## Install
-
-### For an Antigravity Agent (paste this repo URL on any machine)
 
 Tell your Antigravity agent:
 > Install the `swarm-router` plugin from `https://github.com/JEF1056/swarm-router`
 
-Or run directly in a shell:
+Or install from a shell:
 
 ```bash
 git clone https://github.com/JEF1056/swarm-router.git ~/.gemini/config/plugins/swarm-router
@@ -17,80 +15,56 @@ agy plugin validate ~/.gemini/config/plugins/swarm-router --strict
 agy plugin list
 ```
 
-To update later on any machine:
+Update later:
 
 ```bash
 git -C ~/.gemini/config/plugins/swarm-router pull
 ```
 
-*(Alternatively, install a copy via `agy plugin install /path/to/swarm-router`.)*
+## Zero-Bloat Progressive Disclosure
 
-## How It Stays Zero-Bloat Until `/swarm` Is Used
+- **`rules/AGENTS.md`** *(always on, ~115 tokens)*: Keeps simple chats off `/swarm`, allows unprompted swarms for complex or `>3`-slice parallel tasks, and lazy-loads `SKILL.md` only when spawning or checking quotas.
+- **`skills/swarm-router/SKILL.md`** *(lazy-loaded, ~1k tokens)*: Full Gemini-first routing, `5h`/`weekly` quota pacing, effort scaling, and token-discipline rules loaded only when needed.
 
-- **`rules/AGENTS.md`** *(always on, 2 bullets)*: Read in every conversation — prefers **not** to use a swarm for simple tasks (since swarms are expensive), but authorizes agents to **start a swarm directly (even unprompted)** once a task becomes complex/multi-step or highly parallelizable, and lazy-loads `swarm-router` only when starting a swarm.
-- **`skills/swarm-router/SKILL.md`** *(lazy-loaded on `/swarm`)*: Uses Antigravity progressive disclosure so the full routing matrix, quota balancing policy, thinking-effort ladder, and plan-first workflow are **not read during normal conversations** — they load only when `/swarm` starts (or when you ask to inspect quotas).
+## Model Routing (Gemini Default, Claude Only When Really Hard)
 
-## Version-Agnostic Model Routing & Cost Order
+Model IDs are resolved dynamically from `swarm{action:"models", all:true}` by family keyword (newest version first).
 
-Model IDs are resolved dynamically from `swarm{action:"models", all:true}` by matching **family keywords** (preferring the newest available version) and inferring tier/pool from live metadata for any future or renamed models.
-
-Models are ordered from **highest to lowest quota cost** within each tier:
-
-### Smart Tier — Planning, Verification, Coordination, Hard RCA
-| Order | Family | Pool | Best For |
+### Smart Tier — Planning, Audits, Reviews, Verification, Coordination, Hard RCA
+| Priority | Family | Pool | When to Use |
 | :---: | :--- | :--- | :--- |
-| 1 | **Opus / Fable** (`*opus*`, `*fable*`) | 3P / Claude | Hardest architecture plans, critical final verification, or stuck RCAs |
-| 2 | **Carbon** (`*carbon*`) | Gemini | Heaviest Gemini flagship for deepest long-horizon planning, complex architecture, and high-stakes verification |
-| 3 | **Sonnet** (`*sonnet*`) | 3P / Claude | Default 3P workhorse for planning, verification, and coordination |
-| 4 | **Neon** (`*neon*`) | Gemini | Balanced, fast Gemini planner, coordinator, and verifier (best default for most Gemini agentic tasks) |
-
-> **`argon` restriction**: `argon` is **not allowed** unless the other smart Gemini models (`carbon` and `neon`) are unavailable.
+| 1 | **Neon** (`*neon*`) | Gemini | **Default** planner, coordinator, auditor, and verifier |
+| 2 | **Carbon** (`*carbon*`) | Gemini | Deep multi-module architecture, complex plans, high-stakes audits/verification |
+| 3 | **Argon** (`*argon*`) | Gemini | Fallback **only** if both Neon and Carbon are unavailable/exhausted |
+| Escalation | **Opus / Fable** (`*opus*`, `*fable*`) | 3P Claude | **Really hard tasks only**: gnarly architecture, subtle concurrency/security bugs, stuck RCA after 2 failed Gemini rounds, critical final gate (1–2 short bursts; kill on `[done]`) |
+| Fallback | **Sonnet** (`*sonnet*`) | 3P Claude | Only when Gemini Smart is exhausted (`<15%` bottleneck) or a 2nd opinion / stuck RCA needs a non-Gemini model |
 
 ### Grunt Tier — Implementation, Tests, Refactors, Research, Docs
-| Order | Family | Pool | Best For |
+| Priority | Family | Pool | When to Use |
 | :---: | :--- | :--- | :--- |
-| 1 | **Hydrogen** (`*hydrogen*`) | Gemini | Non-trivial multi-file coding, tricky bug fixes, complex refactors |
-| 2 | **Flash** (`*flash*`) | Gemini | Default for straightforward edits, unit tests, builds, scans, docs, narrator/monitor |
+| 1 | **Flash** (`*flash*`, `*flash-lite*`) | Gemini | **Default** for edits, unit tests, builds, scans, docs (`flash-lite` for trivial scans) |
+| 2 | **Hydrogen** (`*hydrogen*`) | Gemini | Non-trivial multi-file coding, tricky fixes, complex refactors, or after 1 failed Flash attempt |
 
-### Custom Models (Local / User-Configured)
-If any custom models are available in `swarm{action:"models", all:true}`:
-- **Think outside the box**: Use them for creative brainstorming, fresh angles, or breaking out of stuck loops.
-- **Refusal fallback**: Try them when standard hosted models refuse a legitimate user request.
-- **Quota-free**: Custom/local models do not burn shared Gemini or 3P cloud quotas.
-
-### Handling Future / Unrecognized Codenames
-When a brand-new codename appears in `swarm{action:"models", all:true}`:
-1. **Live tier anchors**: Models mapped to `flash_lite`/`flash` in `tiers` route to **Grunt**; models mapped to `pro` route to **Smart**.
-2. **Safe quota default**: Unrecognized 3P codenames or models listed above grunt families default to **Smart** (never placed on high-volume grunt fan-outs by accident); `flash`/`lite`/`mini`/`haiku`/`oss` models route to **Grunt**; local/user-configured models route to **Custom**.
-3. **Ask once**: If ambiguous, the coordinator asks you in 1 line where the new model fits before routing heavy work to it.
+### Custom / Local & Unknown Models
+- **Custom / Local**: Zero cloud quota — use for lateral ideas, refusal fallback, or quota-free tasks (low local concurrency).
+- **Unknown codenames**: Inferred from `tiers` (`flash_lite`/`flash` -> Grunt, `pro` -> Smart) and name cues (`flash|lite|mini|haiku|oss` -> Grunt; unknown 3P or above grunt -> Smart, never bulk fan-out). Experiment arms (`*-bon-arm`/`*-bon-le`) are ignored.
 
 ## Thinking Effort Scaling
 
-Effort variants (`-low`, `-medium`, `-high`) are matched dynamically from each model's available IDs:
-
 | Effort | When to Use |
 | :--- | :--- |
-| **`-low`** | Mechanical / trivial tasks: formatting, renames, boilerplate, simple docs, file/log scans, narrator, monitor. |
-| **`-medium`** | **Default for most tasks**: standard implementation, test writing, refactoring, normal planning, routine verification, coordination. |
-| **`-high`** | **Maximum cap**: extremely difficult tasks only — subtle concurrency/state bugs, hard RCA after `-medium` fails, or critical architecture/security reviews. |
-| **`-xhigh` / `-max`** | **Avoid** unless explicitly requested — steep quota cost for marginal gain. |
+| **`-low`** | Mechanical / trivial tasks: renames, formatting, scans, simple docs |
+| **`-medium`** | **Default**: coding, tests, refactors, planning, audits, reviews, verification, coordination |
+| **`-high`** | **Hard cap**: really hard bugs/architecture/security or stuck RCA after `-medium` fails |
+| **`-xhigh` / `-max`** | Avoid unless explicitly requested |
 
-## Quota Efficiency Recommendations (Shared Multi-Machine Setup)
+## Shared-Quota & Token Guardrails
 
-When multiple machines share the same Antigravity account, they draw from the same rolling short-term (`5h`) and `weekly` quota windows across pools.
-
-1. **Run a cheap main model by default**: Keep everyday chats on Flash or Hydrogen (`-medium`). Let the tiny always-on rule nudge you to `/swarm` when a task genuinely needs a smarter model; once `/swarm` starts from a standalone lightweight Flash or Hydrogen main, the coordinator can either upgrade itself (`swarm{action:"model"}`) or delegate planning/verification to smart workers. (Orchestrator coordinators running `neon-medium + hydrogen-medium` are already Tier 2 and must not run `swarm{action:"model"}` at startup.)
-2. **Always check live headroom first**: Run `swarm{action:"models", all:true}` before spawning a swarm (another machine may have recently used the short-term window).
-3. **Actively balance hourly (`5h`) AND `weekly` quotas across pools**: Check both the short-term (hourly/`5h`) and `weekly` windows for every pool; the tighter window governs headroom. Whenever one pool is burning faster or lower on either window, shift eligible roles to run down the fuller pool (route smart roles to **3P** `sonnet`/`opus`/`fable` when Gemini is tighter from grunt work; shift smart roles to **Gemini** `neon`/`carbon` when 3P's hourly or weekly window is tighter; `argon` only if both are unavailable). On G1 Pro/Ultra plans where the 3P weekly budget is much smaller (`24–48x` smaller than Gemini weekly), prefer Gemini (`neon-medium` / `hydrogen-medium`) over Claude whenever 3P weekly % is tighter. Re-check live quotas before spawning new waves.
-4. **Plan first on complex tasks**: One smart `planner` turn (`workspace: "inherit"`) locking interfaces and disjoint file ownership is far cheaper than 3 grunt workers colliding and retrying.
-5. **Escalate lazily, cap retry loops**: Start routine work on `flash-medium`, upgrade to `hydrogen-medium` if it struggles, and escalate to a smart model for RCA after 2 failed rounds instead of burning retries.
-6. **Keep swarms lean and short-lived**:
-   - Aim for 2–4 parallel grunt authors + 1 smart verifier (`workspace: "inherit"`).
-   - Keep briefs <=5 lines and reference earlier posts by `#seq` instead of pasting logs.
-   - Kill finished `share` workers immediately after verification (land changes first), and rotate long-running workers around ~45 turns to prevent >80k-token context bloat.
-7. **Respect 3P prompt cache TTL**: Use `opus`/`sonnet` in tight bursts (plan -> handoff, or verify -> verdict) rather than leaving them idle >5 minutes and resuming with large context.
-8. **Switch instead of killing on quota exhaustion**: Use `swarm{action:"model", name, model}` to move a blocked worker to the healthiest pool without losing its conversation state.
-9. **Pace the weekly window**: If `weekly` remaining % is dropping faster than the fraction of the week left before `resets`, downshift one tier across all roles (`opus/fable -> sonnet`, `carbon -> neon`, `hydrogen -> flash`) and reduce parallel worker count.
+1. **Stay on Gemini by default**: Keep all Grunt and routine Smart roles on Gemini whenever `min(5h, weekly) >= 20%`, even if 3P % looks higher. Spill Smart roles to 3P (`sonnet`) only when Gemini `<20%` and 3P `>=30%`. Never spill Grunt work onto Claude.
+2. **Plan first**: One Gemini Smart `planner` (`workspace: "inherit"`) locking interfaces and disjoint file ownership avoids multi-worker churn.
+3. **Stay lean**: 2–4 `share` grunt authors per 1 `inherit` Smart verifier; briefs `<=5` lines; reference `#seq` instead of pasting logs; avoid `@all`; cap author<->verifier loops at 2 rounds; rotate around ~45 turns (`<=35` on Claude).
+4. **Kill Claude & `share` workers immediately**: Respect the 5-minute 3P KV cache TTL — kill Claude workers right on `[done]` and never run long-idling coordinators or parallel fan-outs on Claude.
+5. **Switch instead of killing on quota exhaustion**: Use `swarm{action:"model", name, model}` to preserve worker context.
 
 ## License
 

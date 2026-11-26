@@ -1,8 +1,8 @@
 {
   "name": "swarm-router",
   "displayName": "Swarm Router",
-  "version": "1.7.0",
-  "description": "Lets agents stay lean on simple tasks, start swarms directly for complex or highly parallelizable work, and lazy-load version-agnostic model routing, hourly/weekly quota balancing, thinking-effort scaling, and plan-first rules.",
+  "version": "1.8.0",
+  "description": "Token-lean, Gemini-first /swarm model routing, 5h/weekly quota pacing, thinking-effort scaling, and plan-first execution — reserving Claude for genuinely hard tasks.",
   "logo": "assets/logo.svg",
   "author": {
     "name": "JEF1056",
@@ -14,8 +14,8 @@
     "url": "https://github.com/JEF1056/swarm-router"
   },
   "suggestedPrompts": [
-    "Check live quota windows and recommend a /swarm roster for this task",
-    "Plan this complex task first, then execute with a balanced /swarm",
+    "Check live quota windows and recommend a Gemini-first /swarm roster for this task",
+    "Plan this complex task first, then execute with a lean /swarm",
     "Show how to pace shared 5h and weekly quotas across multiple machines"
   ]
 }
