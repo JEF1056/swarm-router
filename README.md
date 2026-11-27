@@ -2,27 +2,27 @@
   <img src="assets/logo.svg" alt="Swarm Router logo" width="120" height="120" />
 </p>
 
-# Swarm Router (`v2.0.0`)
+# Swarm Router (`v2.1.0`)
 
 Live quota-aware, **100% model-agnostic** routing plugin for `/swarm` workers and `invoke_subagent` calls.
 
-Instead of hardcoding model or vendor names that go stale across releases and environments, `swarm-router` inspects live `models` metrics (`cost`, `quota_pool`, `pool_size`, short-window and weekly `used`/`remaining`, and `resets` / `resets_in`) right before spawning any worker or subagent.
+Instead of hardcoding model or vendor names or mandating one fixed swarm pipeline, `swarm-router` inspects live `models` metrics (`cost`, `quota_pool`, `pool_size`, short-window and weekly `used`/`remaining`, and `resets` / `resets_in`) right before spawning and chooses both the **topology** and **model tier** for lowest cost and highest first-pass quality.
 
 ## Architecture
 
-1. **Always-read trigger (`rules/AGENTS.md`, <= 25 lines)**
-   - Encourages `invoke_subagent` for bounded delegation and proactive `/swarm` orchestration for parallelizable (`>=3` slices) or long-horizon tasks.
-   - Instructs the main agent to lazy-load `skills/swarm-router/SKILL.md` and inspect live `models` metrics right before spawning any subagent or swarm worker.
+1. **Always-read trigger (`rules/AGENTS.md`, `<= 25` lines)**
+   - Routes trivial work inline, single bounded slices to `invoke_subagent`, and multi-slice / long-horizon work proactively to `/swarm`.
+   - Lazy-loads `skills/swarm-router/SKILL.md` and live `models` metrics right before spawning.
 2. **Lazy-loaded routing manual (`skills/swarm-router/SKILL.md`)**
-   - **Three-tier routing**:
-     - **Grunt tier** *(lowest `cost`, zero-cost/`custom`, or largest / request-based `pool_size`)*: planned, clear-directive, verification-defined work — scouting, multi-file reading/searching, log triage, scoped code edits, tests, builds, and docs.
-     - **Smart tier** *(mid-tier `cost` with strong reasoning and healthy pools)*: planning & interface locking, debugging/RCA, cross-module synthesis, and independent review/verification.
-     - **Escalation tier** *(highest `cost` or smallest/tightest `pool_size`)*: strictly when a task proves too difficult for Smart/Grunt or iterates `>2` rounds without converging.
-   - **Pool balancing math**:
-     - **Relative burn (`cost / pool_size`)**: weighs burn as a fraction of pool capacity and favors request-based or large pools for high-turn Grunt loops.
-     - **Weekly-pool protection**: routes by `min(short_remaining%, weekly_remaining%)` so scarce weekly caps are never wasted even when a short window reads `100%`.
-     - **Reset-time arbitrage**: spends expiring short-window capacity (`resets_in`) first when weekly headroom is healthy, and avoids draining long-reset pools before heavy waves.
-     - **In-place switching**: uses `swarm{action:"model"}` to change models without losing worker conversation history, caps author/verifier loops at 2 rounds, and kills temporary/expensive workers promptly on `[done]`.
+   - **Four-tier routing**:
+     - **Basic** *(ultra-cheap / `-lite`, `-mini`, `-nano`, `-small`, lowest `cost`, or huge lite pools)*: strictly zero-thinking, clear-cut actions (exact-spec edits, formatting, mechanical renames, command execution, literal extraction). Never used for reasoning, synthesis, or bug diagnosis.
+     - **Grunt** *(low-`cost`, `0`/`custom`, or large / request-metered capable workhorses)*: clear-directive engineering (scouting, multi-file exploration, log triage, scoped edits, tests, builds, docs, structured refactors).
+     - **Smart** *(mid-tier `cost` strong reasoners with healthy headroom)*: non-trivial planning & interface locking, ambiguous/cross-module RCA, complex single-owner edits, and independent review/verification.
+     - **Escalation** *(highest `cost`, tightest `pool_size`, or max effort)*: strictly tasks too hard for Smart or stuck past 2 rounds.
+   - **Expected burn & pool math**:
+     - Weighs task difficulty, expected burn (`turns * context * workers`), relative pool cost (`cost / pool_size`), weekly-pool protection (`min(short_remaining%, weekly_remaining%)`), expiring-window arbitrage (`resets_in`), and effort suffixes (`-low`/`-medium`/`-high`/`-max`).
+   - **Adaptive topology**:
+     - Composes only the stages the task earns — scout only when facts/parameters are unclear, plan only when complexity or shared contracts warrant it, verify proportionally to risk, and switch models in-place (`swarm{action:"model"}` / `manage_subagents{Action:"model"}`) instead of repeating failing loops.
 
 ## Install
 

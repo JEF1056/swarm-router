@@ -1,8 +1,8 @@
 {
   "name": "swarm-router",
   "displayName": "Swarm Router",
-  "version": "2.0.0",
-  "description": "Live quota-aware, model-agnostic routing for swarms and subagents — balancing cost, pool size, short-window and weekly limits, and reset times.",
+  "version": "2.1.0",
+  "description": "Live quota-aware, model-agnostic routing for swarms and subagents — matching adaptive topology and four tiers (Basic, Grunt, Smart, Escalation) to task difficulty, expected burn, and live pool health.",
   "logo": "assets/logo.svg",
   "author": {
     "name": "JEF1056",
@@ -14,8 +14,8 @@
     "url": "https://github.com/JEF1056/swarm-router"
   },
   "suggestedPrompts": [
-    "Inspect live model costs, pool sizes, and quota windows and recommend a swarm roster",
-    "Plan this complex task first, then execute with a quota-balanced swarm",
-    "Choose the best subagent model for a bounded search or verification task"
+    "Inspect live model costs, pool sizes, and quota windows and recommend a model or swarm roster",
+    "Choose the right topology and quota-balanced models for this task",
+    "Pick the cheapest model that will finish this bounded task cleanly on the first pass"
   ]
 }

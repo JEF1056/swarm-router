@@ -1,7 +1,8 @@
 # Swarm & Subagent Router
 
-Use live quota metrics instead of guessing models. Keep normal direct work inline (`1-2` trivial calls).
+Match execution shape and model tier to task difficulty, expected burn, and live quota — never guess models or mandate a fixed topology.
 
-- **Use subagents (`invoke_subagent`)** for bounded delegation: multi-file discovery/reading, isolated searches, single-scope edits/tests, or independent checks — never inherit an expensive parent model for cheap grunt work.
-- **Use `/swarm` proactively** (even unprompted) whenever a task splits into `>=3` parallel slices, spans multiple modules, needs long-horizon coordination, or benefits from independent author/verifier loops.
-- **Lazy-load before spawning**: Right before calling `invoke_subagent` or `swarm{action:"add"}`, read the `swarm-router` skill (`SKILL.md`) AND inspect live `models` metrics (`manage_subagents{Action:"models", All:true}` for regular subagent spawns, or `swarm{action:"models", all:true}` when in a swarm) to route by `cost`, `quota_pool`, `pool_size`, short-window & weekly `used`/`remaining`, and `resets` time.
+- **Stay inline** for `1-2` trivial calls.
+- **Use `invoke_subagent`** for one bounded slice (noisy discovery, isolated edit/test, or independent check).
+- **Use `/swarm`** (even unprompted) when work benefits from concurrency (`>=3` independent slices), cross-module coordination, or live author/verifier iteration.
+- **Before spawning** (`invoke_subagent`, `swarm{action:"add"}`, `swarm{action:"model"}`, or `manage_subagents{Action:"model"}`), read the `swarm-router` skill (`SKILL.md`) and inspect live models (`manage_subagents{Action:"models", All:true}`, or `swarm{action:"models", all:true}` when a swarm is active). Never leave `inherit` on an expensive parent for cheaper delegated work.
