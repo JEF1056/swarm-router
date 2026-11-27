@@ -54,7 +54,7 @@ Weigh **task difficulty**, **expected burn**, **relative pool cost (`cost / pool
 
 Do **not** mandate a fixed topology. Add each stage only when uncertainty, complexity, or failure risk justifies its cost:
 
-- **Scout only when parameters or codebase facts are unclear**: If target files, interfaces, or failure surfaces are unknown, run Grunt scout(s) (or Basic strictly for literal lookup/extraction) requesting `<300`-word summaries with `file:line` anchors. Skip scouting when scope is already known.
+- **Always scout when uncertain**: Never guess target files, signatures, call sites, or failure surfaces — whenever parameters or codebase facts are uncertain, run Grunt scout(s) (or Basic strictly for literal lookup/extraction) to return grounded `<300`-word `file:line` facts before planning or editing. Skip scouting only when scope is already verified.
 - **Plan only when complexity warrants it**: If the task spans shared contracts, multiple interacting modules, or non-obvious trade-offs/blast radius, run a Smart planner (`workspace: "inherit"`) to lock interfaces, disjoint file ownership, and acceptance criteria before execution. Skip dedicated planning for clear, isolated, or mechanical work.
 - **Execute at the right granularity**:
   - One bounded slice -> `invoke_subagent` with explicit scope and verification command (no swarm needed).
@@ -62,7 +62,7 @@ Do **not** mandate a fixed topology. Add each stage only when uncertainty, compl
   - Tightly coupled or subtle logic -> one Smart owner instead of splitting into parallel Grunt workers that churn on shared assumptions.
 - **Verify proportionally to risk**:
   - Mechanical or deterministic changes fully proven by tests/typechecks/linters -> author self-verification suffices; skip a dedicated verifier.
-  - Non-trivial code, multi-slice integration, or high failure cost -> pair with an independent Smart verifier (`workspace: "inherit"`, roughly `1` per `2-4` authors).
+  - Non-trivial code, multi-slice integration, or high failure cost -> pair with an independent Smart verifier (`workspace: "inherit"`, roughly `1` per `2-4` authors). Occasionally pick a verifier from a **different model family** (when live pools offer one with balanced `cost / pool_size` and healthy `effective_headroom`) to catch shared blind spots without straining tight weekly budgets.
 - **Keep overhead low & converge cleanly**:
   - Keep coordinators cheap (never Escalation), briefs `<=5` lines with exact ownership and `"done"` criteria, waits on `swarm_wait{mentions_only:true, since}`, and cross-references by `#seq` instead of pasting raw logs.
   - If a Basic worker makes mistakes or stalls, upgrade immediately to Grunt instead of coaching it.

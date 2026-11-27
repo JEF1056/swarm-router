@@ -2,7 +2,7 @@
   <img src="assets/logo.svg" alt="Swarm Router logo" width="120" height="120" />
 </p>
 
-# Swarm Router (`v2.1.0`)
+# Swarm Router (`v2.1.1`)
 
 Live quota-aware, **100% model-agnostic** routing plugin for `/swarm` workers and `invoke_subagent` calls.
 
@@ -22,7 +22,7 @@ Instead of hardcoding model or vendor names or mandating one fixed swarm pipelin
    - **Expected burn & pool math**:
      - Weighs task difficulty, expected burn (`turns * context * workers`), relative pool cost (`cost / pool_size`), weekly-pool protection (`min(short_remaining%, weekly_remaining%)`), expiring-window arbitrage (`resets_in`), and effort suffixes (`-low`/`-medium`/`-high`/`-max`).
    - **Adaptive topology**:
-     - Composes only the stages the task earns — scout only when facts/parameters are unclear, plan only when complexity or shared contracts warrant it, verify proportionally to risk, and switch models in-place (`swarm{action:"model"}` / `manage_subagents{Action:"model"}`) instead of repeating failing loops.
+     - Composes only the stages the task earns — always scout when uncertain rather than guessing, plan only when complexity or shared contracts warrant it, verify proportionally to risk (occasionally using a different model family within balanced pool budgets), and switch models in-place (`swarm{action:"model"}` / `manage_subagents{Action:"model"}`) instead of repeating failing loops.
 
 ## Install
 

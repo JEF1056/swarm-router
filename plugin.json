@@ -1,7 +1,7 @@
 {
   "name": "swarm-router",
   "displayName": "Swarm Router",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Live quota-aware, model-agnostic routing for swarms and subagents — matching adaptive topology and four tiers (Basic, Grunt, Smart, Escalation) to task difficulty, expected burn, and live pool health.",
   "logo": "assets/logo.svg",
   "author": {
