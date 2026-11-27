@@ -1,51 +1,64 @@
 ---
 name: swarm-router
-description: >-
-  Gemini-first swarm model routing, 5h/weekly quota pacing, thinking-effort
-  scaling, and token-lean execution. Read ONLY before swarm{action:"add"},
-  checking quotas, or designing a roster.
+description: Live quota-aware, model-agnostic routing for subagents and swarms. Read right before calling invoke_subagent or swarm{action:"add"} or swarm{action:"model"} to route across Grunt, Smart, and Escalation tiers using live cost, quota_pool, pool_size, short-window and weekly used/remaining, and reset times.
 ---
 
-# Swarm Router (Gemini-First, Token-Lean)
+# Swarm & Subagent Router
 
-Overrides "leave `model` off" unless the user specifies a model. Always pass explicit `model` on `swarm{action:"add"}`.
+Always route from **live tool data**, never from memorized model names or habits.
 
-## 1. Live Discovery
+## 1. Live Discovery (Before Spawning)
 
-Run `swarm{action:"models", all:true}` (`manage_subagents{Action:"models", All:true}` outside a swarm) before spawning and before new waves:
-- Never hardcode versions — pick the newest matching family ID from live `models`.
-- Check **both** `5h` and `weekly` in `quota_windows` (shared across machines); `headroom = min(5h, weekly)`.
+Before calling `invoke_subagent`, `swarm{action:"add"}`, or `swarm{action:"model"}`:
 
-## 2. Tiers & Routing (Prefer Gemini; Claude Only When Really Hard)
+1. **Inspect live models**:
+   - **Regular subagents**: Call `manage_subagents{Action:"models", All:true}` to read every eligible model's live `cost`, pool metrics, and `quota_windows` (and inspect the `invoke_subagent` `Model` options if `models` is unavailable on that action). Do **not** call `swarm` unprompted when no swarm is active.
+   - **Active swarms**: Call `swarm{action:"models", all:true}` to read every eligible model and `quota_windows` entry.
+2. **Read every pool metric**:
+   - `cost`: relative burn per turn/request (`0`, `0 (custom)`, `0.5x`, `1x`, `2x`, `4x`, etc.).
+   - `quota_pool` & `pool_size` (and `weekly_quota_pool` & `weekly_pool_size`): shared bucket name and capacity (`WTU`, request-based `req`, or `custom` / `unlimited`).
+   - `quota_used` / `quota_remaining` (short/daily window) and `weekly_quota_used` / `weekly_quota_remaining` (long/weekly window, shared across sessions).
+   - `quota_resets` / `weekly_quota_resets` / `resets_in`: time until the pool refreshes.
+3. **Never inherit an expensive parent**: Explicitly pass `model` on `swarm{action:"add"}` and `Model` on `invoke_subagent`. Leaving `inherit` on a Smart or Escalation parent wastes scarce quota on routine delegation. Treat `cost: 0` / `custom` / `unlimited` entries as free capacity (respecting local concurrency if self-hosted).
 
-- **Smart** *(Planning, Audits, Reviews, Verification, Coordination, Hard RCA)*:
-  - **Gemini (default)**:
-    1. `neon` — default planner, coordinator, auditor, verifier.
-    2. `carbon` — deep multi-module architecture, complex plans, high-stakes audits/verification.
-    3. `argon` — **only** if both `neon` and `carbon` are unavailable/exhausted.
-  - **3P Claude (escalation only — scarce, much smaller weekly pool)**:
-    - **Never default routine planning, coordination, verification, or audits to Claude**, even when 3P % >= Gemini %.
-    - `opus` / `fable` — **really hard tasks only** (gnarly architecture, subtle concurrency/security bugs, stuck RCA after 2 failed Gemini rounds, critical final gate). Max 1–2 short bursts per swarm.
-    - `sonnet` — **only** if Gemini Smart headroom `<15%` or a stuck RCA / 2nd opinion needs a non-Gemini model.
-- **Grunt** *(Implementation, Tests, Refactors, Research, Docs)*:
-  1. `flash` *(default; `flash-lite` for trivial scans/boilerplate)* — edits, tests, builds, scans, docs.
-  2. `hydrogen` — multi-file coding, tricky fixes, complex refactors, or after 1 failed `flash` attempt.
-- **Custom / Local**: Zero cloud quota — use for lateral ideas, refusal fallback, or quota-free work (keep local concurrency low).
-- **Unknown codenames**: Map via `tiers` (`flash_lite`/`flash` -> Grunt, `pro` -> Smart) and name cues (`flash|lite|mini|haiku|oss` -> Grunt; local -> Custom; unknown 3P or above grunt -> Smart, never bulk fan-out). Ignore `*-bon-arm`/`*-bon-le`. Ask user in 1 line if ambiguous.
+## 2. Three-Tier Routing
 
-## 3. Quota Pacing & Effort
+Match task ambiguity and failure cost to the cheapest tier that finishes cleanly:
 
-- **Gemini default**: Stay on Gemini (`flash`/`hydrogen` + `neon`/`carbon`) while Gemini `headroom >= 20%`. Spill Smart roles to `sonnet` only if Gemini `<20%` and 3P `>=30%`; never spill Grunt to Claude.
-- **Tight pools**: If Gemini `<30%` or weekly % drops faster than elapsed week, downshift (`carbon -> neon`, `hydrogen -> flash`, `-high -> -medium`), cut concurrency, skip speculative fan-outs, and use custom/local models.
-- **On exhaustion**: Switch in-place via `swarm{action:"model", name, model}` to the healthiest same-tier pool — never `kill` + `add`.
-- **Effort suffix** (match available `-low`/`-medium`/`-high`, else base ID): `-low` mechanical/trivial (renames, formatting, scans, docs); `-medium` *(default)* everything standard; `-high` *(hard cap)* really hard bugs/architecture or stuck RCA after `-medium` fails. Never `-xhigh`/`-max` unless requested.
+| Tier | How to identify live | Route here | Keep off this tier |
+| :--- | :--- | :--- | :--- |
+| **Grunt** | Lowest `cost` (including `0`/`custom`) or largest / request-based `pool_size` | Planned, clear-directive, verification-defined work: scouting, multi-file reading/searching, log triage, scoped code edits, tests, builds, docs, mechanical refactors | Open-ended architecture, ambiguous bugs, final sign-off |
+| **Smart** | Mid-tier `cost` with strong reasoning and healthy remaining pool (prefer `cost: 0` capable/routed options first if present) | Initial planning & interface locking, non-trivial debugging/RCA, cross-module synthesis, independent diff review & verification | Bulk file reading, grep/search fan-outs, repetitive edits |
+| **Escalation** | Highest `cost` or smallest/tightest `pool_size` | **Strictly** when a task is far too difficult for Smart/Grunt, or has iterated too long (**`>2` rounds**) without converging | Routine coding, scouting, builds, coordinators, multi-worker fan-outs |
 
-## 4. Plan-First & Token Discipline
+## 3. Quota Math & Pool Balancing
 
-- **Startup**: On standalone Flash/Hydrogen mains, upgrade coordinator (`swarm{action:"model"}` -> `neon-medium`) or delegate planning/verification to Gemini Smart workers. **Orchestrator coordinators (`neon-medium + hydrogen-medium`) are already Tier 2 — do NOT switch at startup.**
-- **Plan first** on complex tasks: 1 Smart `planner` (`workspace: "inherit"`) locks interfaces, disjoint file ownership, and acceptance checks before spawning grunt workers.
-- **Lean execution**:
-  - **2–4** grunt authors (`workspace: "share"`) per **1** Smart verifier (`workspace: "inherit"`). Avoid `@all`.
-  - Briefs **`<=5` lines** (exact paths + done criteria); reference posts by `#seq` instead of pasting logs/diffs.
-  - Cap author<->verifier loops at **2 rounds**, then rotate or escalate (`flash -> hydrogen -> neon/carbon -> Claude`).
-  - Rotate at **~45 turns** (`<=35` on Claude). Land work and **kill finished `share` and Claude workers immediately** (5m KV TTL; never idle Claude coordinators or fan out on Claude).
+Do not pick by raw `cost` or raw `remaining%` alone — combine them:
+
+1. **Relative burn (`cost / pool_size`)**:
+   - Compare burn as a fraction of the pool (`cost / pool_size`), not just the raw multiplier.
+   - For high-turn Grunt work, prefer **request-based pools** (`req`) or **large-capacity pools** over small token-weighted pools so long tool loops do not drain tight token budgets.
+2. **Weekly-pool protection**:
+   - Compute `effective_headroom = min(short_remaining%, weekly_remaining%)`.
+   - Weekly pools refresh slowest and are shared across sessions/machines. Never burn a tight weekly pool (especially Escalation-tier weekly quota) on Grunt or routine Smart tasks even when its short-window `remaining%` reads `100%`.
+   - If a weekly pool drains faster than elapsed week, downshift tier, pick a lower effort/thinking variant (if live IDs offer `-low`/`-medium`/`-high` suffixes), and shrink parallel worker count.
+3. **Reset-time arbitrage (`resets` / `resets_in`)**:
+   - **Spend expiring short windows first**: if a pool has healthy weekly headroom and `resets_in` is short (e.g., `<1-2h`) with plenty of short-window `remaining%`, route compatible work there before that capacity expires unused.
+   - **Protect long-reset pools**: avoid launching a heavy wave on a nearly depleted pool (`<15-20%` effective headroom) unless a reset is imminent.
+4. **Effort / thinking scaling** *(when live model IDs expose effort suffixes)*:
+   - Default to balanced/medium effort for normal work, low effort for pure search/listing/formatting, and high effort strictly for Escalation or stubborn RCA after medium fails.
+
+## 4. Executing Subagents & Swarms
+
+### Regular Subagents (`invoke_subagent`)
+- **Recon / initial bug scan (`>=3` files)**: pick the lightest non-inherit Grunt option from the live `Model` list; demand a `<300`-word summary with `file:line` anchors.
+- **Bounded implementation / test execution**: pick a Grunt option with an explicit scope and verification command.
+- **Independent review / hard synthesis**: pick a Smart option (never Escalation unless prior attempts failed or the problem is exceptionally subtle).
+
+### Swarms (`swarm`)
+1. **Plan before fanning out**: Run Grunt scout(s) if discovery is needed -> use a Smart planner (`workspace: "inherit"`) to lock interfaces, disjoint file ownership, and acceptance criteria -> fan out `2-4` Grunt authors (`workspace: "share"` or `"branch"`) per `1` Smart verifier (`workspace: "inherit"`).
+2. **Keep coordinator overhead tiny**: Never run the coordinator on an Escalation model when a Grunt/Smart model can manage the board. Keep briefs `<=5` lines with exact file ownership and `"done"` criteria, wait with `swarm_wait{mentions_only:true, since}`, and cite `#seq` instead of pasting raw logs.
+3. **Cap loops at 2 rounds & switch in-place**:
+   - Cap author-to-verifier loops at **2 rounds**. If round 2 still fails, switch/escalate to a stronger Smart or Escalation specialist, or run root-cause analysis.
+   - On quota exhaustion, capacity error, or a needed tier upgrade on an existing worker, call `swarm{action:"model", name, model}` to switch **in-place** while preserving conversation history — never `kill` + `add` just to change models.
+   - Rotate bloated workers around `~45` turns (`<=35` turns on Escalation pools) and `kill` finished Escalation/`share` workers promptly after landing their verified change.
